@@ -1,10 +1,12 @@
-require('dotenv').config()
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config()
+}
 const express = require('express')
 const app = express()
-
-app.get('/', (req, res) => {
-  res.send('hello123')
-})
+const transactionController = require('./controllers/transaction-controller')
+app.use(express.json())
+app.get('/transactions/:group_id', transactionController.getTransactions)
+app.delete('/transaction/:id', transactionController.removeOne)
 
 app.listen(process.env.PORT, () => {
   console.log('App is running!')
