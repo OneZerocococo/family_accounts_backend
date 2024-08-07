@@ -50,7 +50,7 @@ const transactionController = {
       const endOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 1, -8, 0, 0))
       const transactions = await Transaction.find({ 
         group_id: req.params.group_id,
-        time: { $gte: startOfMonth, $lt: endOfMonth }
+        date: { $gte: startOfMonth, $lt: endOfMonth }
        }).toArray()
       console.log('transactions: ', transactions)
       res.status(200).json(transactions)
