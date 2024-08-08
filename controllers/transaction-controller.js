@@ -7,12 +7,16 @@ const generateRandomId = () => {
   return Math.random().toString(36).substr(2, 12).toUpperCase()
 };
 
-const getCategories = async () => {
-  const categories = await Categories.find().toArray()
-  return categories
-}
-
 const transactionController = {
+  getCategories: async (req, res) => {
+    try {
+      const categories = await Categories.find().toArray()
+      res.status(200).json(categories)
+    } catch (error) {
+      res.status(500).json({ error: 'Internal Server Error' })
+    }
+    
+  },
   getBalance: async (req, res) => {
     try {
       let endDate
