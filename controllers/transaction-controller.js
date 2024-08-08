@@ -86,7 +86,7 @@ const transactionController = {
     try {
       const { date, group_id, img, category_id, amount, description } = req.body;
 
-      if (!date || !group_id || !img || !category_id || !amount || !description) {
+      if (!date || !group_id || !category_id || !amount || !description) {
         return res.status(400).json({ result: 'failed', message: 'Missing required fields' });
       }
 
