@@ -1,10 +1,16 @@
 const client = require('../config/mongodb')
 const db = client.db()
 const Transaction = db.collection('transactions')
+const Categories = db.collection('categories')
 
 const generateRandomId = () => {
-  return Math.random().toString(36).substr(2, 12).toUpperCase(); // 生成 12 位隨機 ID
+  return Math.random().toString(36).substr(2, 12).toUpperCase()
 };
+
+const getCategories = async () => {
+  const categories = await Categories.find().toArray()
+  return categories
+}
 
 const transactionController = {
   createTransaction: async (req, res) => {
@@ -48,11 +54,36 @@ const transactionController = {
       const now = new Date()
       const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, -8, 0, 0))
       const endOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 1, -8, 0, 0))
-      const transactions = await Transaction.find({ 
-        group_id: req.params.group_id,
-        date: { $gte: startOfMonth, $lt: endOfMonth }
-       }).toArray()
-      console.log('transactions: ', transactions)
+      const transactions = await Transaction.aggregate([
+        {
+          $match: {
+            group_id: req.params.group_id,
+            date: { $gte: startOfMonth, $lt: endOfMonth }
+          }
+        },
+        {
+          $lookup: {
+            from: 'categories',
+            localField: 'category_id',
+            foreignField: 'category_id',
+            as: 'category_info'
+          }
+        },
+        {
+          $unwind: '$category_info'
+        },
+        {
+          $addFields: {
+            category_name: '$category_info.name'
+          }
+        },
+        {
+          $project: {
+            category_info: 0
+          }
+        }
+      ]).toArray()
+
       res.status(200).json(transactions)
     } catch (error) {
       console.error(error)
