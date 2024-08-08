@@ -13,6 +13,71 @@ const getCategories = async () => {
 }
 
 const transactionController = {
+  getBalance: async (req, res) => {
+    try {
+      let endDate
+      if (req.query.endDate) {
+        const endDateStr = req.query.endDate;
+        if (!/^\d{8}$/.test(endDateStr)) {
+          return res.status(400).json({ error: 'Invalid endDate format. Expected YYYYMMDD.' });
+        }
+
+        const year = parseInt(endDateStr.substring(0, 4), 10);
+        const month = parseInt(endDateStr.substring(4, 6), 10) - 1
+        const day = parseInt(endDateStr.substring(6, 8), 10);
+
+        endDate = new Date(Date.UTC(year, month, day, 16, 0, 0))
+      } else {
+        endDate = new Date();
+        endDate.setUTCHours(16, 0, 0, 0)
+      }
+
+      const result = await Transaction.aggregate([
+        {
+          $match: {
+            group_id: req.params.group_id,
+            date: { $lte: endDate }
+          }
+        },
+        {
+          $lookup: {
+            from: 'categories',
+            localField: 'category_id',
+            foreignField: 'category_id',
+            as: 'category_info'
+          }
+        },
+        {
+          $unwind: '$category_info'
+        },
+        {
+          $addFields: {
+            adjustedAmount: {
+              $cond: {
+                if: '$category_info.is_expense',
+                then: { $multiply: ['$amount', -1] },
+                else: '$amount'
+              }
+            }
+          }
+        },
+        {
+          $group: {
+            _id: null,
+            totalAmount: { $sum: '$adjustedAmount' }
+          }
+        }
+      ]).toArray();
+
+      const totalAmount = result.length > 0 ? result[0].totalAmount : 0;
+
+      console.log('currentBalance: ', totalAmount);
+      res.status(200).json({ balance: totalAmount });
+    } catch (error) {
+      console.error(error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  },
   createTransaction: async (req, res) => {
     try {
       const { date, group_id, img, category_id, amount, description } = req.body;
