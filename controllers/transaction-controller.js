@@ -84,18 +84,15 @@ const transactionController = {
   },
   createTransaction: async (req, res) => {
     try {
-      const { date, group_id, img, category_id, amount, description } = req.body;
+      const { date, group_id, img, category_id, amount, description } = req.body
 
       if (!date || !group_id || !category_id || !amount || !description) {
-        return res.status(400).json({ result: 'failed', message: 'Missing required fields' });
+        return res.status(400).json({ result: 'failed', message: 'Missing required fields' })
       }
-
-      const parsedDate = new Date(date);
-      if (isNaN(parsedDate.getTime())) {
-        return res.status(400).json({ result: 'failed', message: 'Invalid date format' });
-      }
-
-      const id = generateRandomId();
+  
+      const dateSplit = date.split('-')
+      const parsedDate = new Date(Date.UTC(dateSplit[0], dateSplit[1] - 1, dateSplit[2] - 1, 16, 0, 0)).toISOString()
+      const id = generateRandomId()
 
       const newTransaction = {
         date: parsedDate,
@@ -110,7 +107,7 @@ const transactionController = {
       const result = await Transaction.insertOne(newTransaction);
       if (result.acknowledged) {
         const insertedDoc = await Transaction.findOne({ _id: result.insertedId });
-        return res.status(201).json({ result: 'success', data: insertedDoc });
+        return res.status(201).json({ result: 'success', data: { ...insertedDoc, date } });
       }
       return res.status(500).json({ result: 'failed', message: 'Failed to insert document' });
     } catch (error) {
