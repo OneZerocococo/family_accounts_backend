@@ -7,6 +7,10 @@ const app = express()
 
 const transactionController = require('./controllers/transaction-controller')
 
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config()
+}
+require('./config/mongoose')
 app.use(cors())
 app.use(express.json())
 app.get('/categories', transactionController.getCategories)
