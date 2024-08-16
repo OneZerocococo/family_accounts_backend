@@ -1,66 +1,138 @@
-const client = require('../config/mongodb')
-const db = client.db()
-const Transaction = db.collection('transactions')
-const Categories = db.collection('categories')
-
+const Transaction = require('../models/transaction')
 const generateRandomId = () => {
-  return Math.random().toString(36).substr(2, 12).toUpperCase()
-};
+  return Math.random().toString(36).slice(2, 14).toUpperCase()
+}
 
 const transactionController = {
-  getCategories: async (req, res) => {
+  getTransactionsByGroup: async (req, res, next) => {
     try {
-      const categories = await Categories.find().toArray()
-      res.status(200).json(categories)
-    } catch (error) {
-      res.status(500).json({ error: 'Internal Server Error' })
-    }
-    
-  },
-  getBalance: async (req, res) => {
-    try {
-      let endDate
-      if (req.query.endDate) {
-        const endDateStr = req.query.endDate;
-        if (!/^\d{8}$/.test(endDateStr)) {
-          return res.status(400).json({ error: 'Invalid endDate format. Expected YYYYMMDD.' });
+      const { groupId } = req.params
+      const { startDate, endDate } = req.query
+      if (!startDate || !endDate || !groupId) return res.status(400).json({
+        error: {
+          message: 'startDate, endDate, and groupId are required fields'
         }
+      })
+      if (startDate > endDate) return res.staus(400).json({
+        error: {
+          message: 'startDate must be earlier than endDate'
+        }
+      })
+      const transactions = await Transaction.find({
+        group_id: groupId,
+        date: { $gte: new Date(startDate), $lte: new Date(endDate) }
+      }).lean()
 
-        const year = parseInt(endDateStr.substring(0, 4), 10);
-        const month = parseInt(endDateStr.substring(4, 6), 10) - 1
-        const day = parseInt(endDateStr.substring(6, 8), 10);
-
-        endDate = new Date(Date.UTC(year, month, day, 16, 0, 0))
-      } else {
-        endDate = new Date();
-        endDate.setUTCHours(16, 0, 0, 0)
+      return res.status(200).json(transactions)
+    } catch (error) {
+      next(error)
+    }
+  },
+  addOneTransaction: async (req, res, next) => {
+    try {
+      const { category, description, date, groupId, amount, imgUrl } = req.body
+      if ( !category || !description || !date || !groupId || !amount ) {
+        return res.status(400).json({
+          error: {
+            message: 'category, description, date, groupId, amount are required fields'
+          }
+        })
       }
-
+      const newTransaction = await Transaction.create({
+        id: 'T' + generateRandomId(),
+        category,
+        description,
+        date: new Date(date),
+        group_id: groupId,
+        amount,
+        img_url: imgUrl
+      })
+      return res.status(200).json({ transaction: newTransaction })
+    } catch (error) {
+      next(error)
+    }
+  },
+  updateTransaction: async (req, res, next) => {
+    try {
+      const transactionId = req.params.id
+      const { date, imgUrl, category, amount, description } = req.body
+      if (!transactionId || !category || !description || !date || !amount) {
+        return res.status(400).json({
+          error: {
+            message: 'category, description, date, amount are required fields'
+          }
+        })
+      }
+      const updatedResult = await Transaction.updateOne(
+        { 
+          id: transactionId 
+        },
+        {
+          $set: {
+            category,
+            description,
+            date: new Date(date),
+            amount,
+            img_url: imgUrl
+          }
+        }
+      )
+      if (updatedResult.matchedCount < 1) {
+        return res.status(404).json({
+          error: {
+            message: 'Transaction not found'
+          }
+        })
+      } else if (updatedResult.modifiedCount < 1) {
+        return res.status(200).json({ result: 'failed', message: "No changes were made" })
+      }
+      const updatedTransaction = await Transaction.findOne({ id: transactionId })
+      return res.status(200).json({ transaction: updatedTransaction })
+    } catch (error) {
+      next(error)
+    }
+  },
+  deleteTransactions: async (req, res, next) => {
+    try {
+      const { transactionIds } = req.body
+      if (!transactionIds || transactionIds.length < 1) {
+        return res.status(400).json({
+          error: {
+            message: 'transactionIds can not be empty'
+          }
+        })
+      }
+        const deleteResult = await Transaction.deleteMany({
+        id: {
+          $in: transactionIds
+        }
+      })
+      console.log(deleteResult)
+      if (deleteResult.deletedCount >= 1) {
+        return res.status(200).json({ result: 'success', message: `Deleted ${deleteResult.deletedCount} transactions` })
+      }
+      return res.status(404).json({ result: 'failed', message: 'Document not found' })
+    } catch (error) {
+      next(error)
+    }
+  },
+  getBalance: async (req, res, next) => {
+    try {
+      const { endDate } = req.query
       const result = await Transaction.aggregate([
         {
           $match: {
-            group_id: req.params.group_id,
-            date: { $lte: endDate }
+            group_id: req.params.groupId,
+            date: { $lte: new Date(endDate) }
           }
-        },
-        {
-          $lookup: {
-            from: 'categories',
-            localField: 'category_id',
-            foreignField: 'category_id',
-            as: 'category_info'
-          }
-        },
-        {
-          $unwind: '$category_info'
         },
         {
           $addFields: {
             adjustedAmount: {
               $cond: {
-                if: '$category_info.is_expense',
-                then: { $multiply: ['$amount', -1] },
-                else: '$amount'
+                if: { $eq: ["$category.is_expense", true] },
+                then: { $multiply: ["$amount", -1] },
+                else: "$amount"
               }
             }
           }
@@ -68,113 +140,17 @@ const transactionController = {
         {
           $group: {
             _id: null,
-            totalAmount: { $sum: '$adjustedAmount' }
+            totalAmount: { $sum: "$adjustedAmount" }
           }
         }
-      ]).toArray();
+      ])
 
-      const totalAmount = result.length > 0 ? result[0].totalAmount : 0;
-
-      console.log('currentBalance: ', totalAmount);
-      res.status(200).json({ balance: totalAmount });
+      const totalAmount = result.length > 0 ? result[0].totalAmount : 0
+      return res.status(200).json({ balance: totalAmount })
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: 'Internal Server Error' });
+      next(error)
     }
-  },
-  createTransaction: async (req, res) => {
-    try {
-      const { date, group_id, img, category_id, amount, description } = req.body
-
-      if (!date || !group_id || !category_id || !amount || !description) {
-        return res.status(400).json({ result: 'failed', message: 'Missing required fields' })
-      }
-  
-      const dateSplit = date.split('-')
-      const parsedDate = new Date(Date.UTC(dateSplit[0], dateSplit[1] - 1, dateSplit[2] - 1, 16, 0, 0)).toISOString()
-      const id = generateRandomId()
-
-      const newTransaction = {
-        date: parsedDate,
-        group_id,
-        img,
-        category_id,
-        amount,
-        id,
-        description,
-      };
-
-      const result = await Transaction.insertOne(newTransaction);
-      if (result.acknowledged) {
-        const insertedDoc = await Transaction.findOne({ _id: result.insertedId });
-        return res.status(201).json({ result: 'success', data: { ...insertedDoc, date } });
-      }
-      return res.status(500).json({ result: 'failed', message: 'Failed to insert document' });
-    } catch (error) {
-      console.error(error);
-      res.status(500).json({ result: 'error', message: error.message });
-    }
-  },
-  getTransactions: async (req, res) => {
-    try {
-      const now = new Date()
-      const startOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1, -8, 0, 0))
-      const endOfMonth = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 1, -8, 0, 0))
-      const transactions = await Transaction.aggregate([
-        {
-          $match: {
-            group_id: req.params.group_id,
-            date: { $gte: startOfMonth, $lt: endOfMonth }
-          }
-        },
-        {
-          $lookup: {
-            from: 'categories',
-            localField: 'category_id',
-            foreignField: 'category_id',
-            as: 'category_info'
-          }
-        },
-        {
-          $unwind: '$category_info'
-        },
-        {
-          $addFields: {
-            category_name: '$category_info.name'
-          }
-        },
-        {
-          $project: {
-            category_info: 0
-          }
-        }
-      ]).toArray()
-
-      res.status(200).json(transactions)
-    } catch (error) {
-      console.error(error)
-    }
-  },
-  removeOne: async (req, res) => {
-    try {
-      const transactionId = req.params.id;
-
-      if (!transactionId || typeof transactionId !== 'string') {
-        return res.status(400).json({ result: 'failed', message: 'Invalid transaction_id format' });
-      }
-
-      const result = await Transaction.deleteOne({ id: transactionId });
-
-      if (result.deletedCount === 1) {
-        return res.status(200).json({ result: 'success' });
-      }
-
-      return res.status(404).json({ result: 'failed', message: 'Document not found' })
-    } catch (error) {
-      console.error(error)
-      return res.status(500).json({ result: 'error', message: error.message });
-    }
-  } 
+  }
 }
 
 module.exports = transactionController

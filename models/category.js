@@ -2,8 +2,9 @@ const mongoose = require('mongoose')
 const Schema = mongoose.Schema
 const categorySchema = new Schema({
   id: {
-    type: Schema.Types.UUID,
-    required: true
+    type: String,
+    required: true,
+    unique: true
   },
   name: {
     type: String,

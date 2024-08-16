@@ -4,20 +4,21 @@ if (process.env.NODE_ENV !== 'production') {
 const cors = require('cors')
 const express = require('express')
 const app = express()
+const routes = require('./routes')
 
-const transactionController = require('./controllers/transaction-controller')
-
-if (process.env.NODE_ENV !== 'production') {
-  require('dotenv').config()
-}
 require('./config/mongoose')
 app.use(cors())
 app.use(express.json())
-app.get('/categories', transactionController.getCategories)
-app.get('/getBalance/:group_id', transactionController.getBalance)
-app.get('/transactions/:group_id', transactionController.getTransactions)
-app.delete('/transaction/:id', transactionController.removeOne)
-app.post('/transaction', transactionController.createTransaction)
+app.use('/', routes)
+
+app.use((err, req, res, next) => {
+  console.error(err.stack)
+  res.status(500).json({
+    error: {
+      message: 'Internal Server Error'
+    }
+  })
+})
 
 app.listen(process.env.PORT, () => {
   console.log('App is running!')
