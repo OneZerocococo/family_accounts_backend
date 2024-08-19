@@ -21,7 +21,10 @@ const transactionController = {
       const transactions = await Transaction.find({
         group_id: groupId,
         date: { $gte: new Date(startDate), $lte: new Date(endDate) }
-      }).lean()
+      })
+        .select('-_id')
+        .sort({ date: 1 })
+        .lean()
 
       return res.status(200).json(transactions)
     } catch (error) {
