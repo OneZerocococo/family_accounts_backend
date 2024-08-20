@@ -22,6 +22,10 @@ const transactionSchema = new Schema(
         type: Boolean,
         required: true,
         default: true
+      },
+      icon: {
+        type: String,
+        require: true
       }
     },
     description: {
