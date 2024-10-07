@@ -7,5 +7,8 @@ const router = express.Router()
 router.use('/user', user)
 router.use('/categories', category)
 router.use('/transactions', transaction)
+router.get('/ping', (req, res) => {
+  res.send('Server is awake.');
+})
 
 module.exports = router
