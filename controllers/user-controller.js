@@ -3,10 +3,12 @@ const User = require('../models/user')
 
 async function verifyLineAccessToken (lineAccessToken) {
   try {
-    const verifyTokenResult = await axios.get(`https://api.line.me/oauth2/v2.1/verify?access_token=${lineAccessToken}`)
+    const response = await axios.get(`https://api.line.me/oauth2/v2.1/verify?access_token=${lineAccessToken}`)
     if (response.status === 200) {
-      return verifyTokenResult.client_id === process.env.CHANNEL_ID && verifyTokenResult.expires_in > 0
+      console.log('success', response.data.client_id, response.data.expires_in)
+      return response.data.client_id === process.env.CHANNEL_ID && response.data.expires_in > 0
     } else {
+      console.log(response)
       return false
     }
   } catch (error) {
@@ -22,7 +24,7 @@ async function getLineUserProfile (lineAccessToken) {
         'Authorization': `Bearer ${lineAccessToken}`
       }
     })
-    return profile
+    return profile.data
   } catch (error) {
     console.error(error)
   }
@@ -46,6 +48,7 @@ const userController = {
         })
       } else {
         const lineUserProfile = await getLineUserProfile(lineAccessToken)
+        console.log(lineUserProfile)
         const user = await User.findOne({ id: lineUserProfile.userId }).select('-_id')
         if (!user) return res.status(401).json({
           error: {
