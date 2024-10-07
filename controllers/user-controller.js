@@ -6,9 +6,9 @@ async function verifyLineAccessToken (lineAccessToken) {
     const response = await axios.get(`https://api.line.me/oauth2/v2.1/verify?access_token=${lineAccessToken}`)
     if (response.status === 200) {
       console.log('success', response.data.client_id, response.data.expires_in)
-      console.log(response.data.client_id === process.env.CHANNEL_ID)
+      console.log(response.data.client_id == process.env.CHANNEL_ID)
       console.log(response.data.expires_in > 0)
-      return response.data.client_id === process.env.CHANNEL_ID && response.data.expires_in > 0
+      return response.data.client_id == process.env.CHANNEL_ID && response.data.expires_in > 0
     } else {
       console.log(response)
       return false
